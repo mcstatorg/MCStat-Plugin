@@ -1,0 +1,5 @@
+name: McStat
+main: org.mcstat.bungee.McStatBungeePlugin
+version: ${project.version}
+author: McStat
+description: Server statistics tracking for mcstat.org
