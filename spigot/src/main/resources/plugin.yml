@@ -1,0 +1,20 @@
+name: McStat
+version: ${project.version}
+main: org.mcstat.spigot.McStatSpigotPlugin
+api-version: "1.13"
+folia-supported: true
+description: Server statistics tracking for mcstat.org
+author: McStat
+website: https://mcstat.org
+commands:
+  mcstat:
+    description: McStat plugin commands
+    usage: /mcstat [status|reload|link]
+    permission: mcstat.admin
+  vote:
+    description: Sunucumuza oy ver
+    usage: /vote
+permissions:
+  mcstat.admin:
+    description: Access to McStat admin commands
+    default: op

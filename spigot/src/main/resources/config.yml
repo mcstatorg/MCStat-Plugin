@@ -1,0 +1,20 @@
+# McStat Configuration
+# Get your API key from https://mcstat.org/dashboard
+
+api-key: "YOUR_API_KEY_HERE"
+api-base-url: "https://mcstat.org"
+
+# How often to send server stats (seconds). Minimum: 10
+sync-interval: 90
+
+# Custom vote URL (optional). If set, /vote will use this link instead of auto-detecting.
+# Example:
+# vote-url: "https://mcstat.org/tr/servers/your-server-slug#vote"
+
+# What data to collect
+metrics:
+  tps: true
+  player-count: true
+  player-names: true
+  player-playtime: true
+  player-events: true
