@@ -34,7 +34,7 @@ public class McStatCore {
     private volatile boolean apiKeyValid = false;
     private volatile String serverName = "Unknown";
     private volatile String serverSlug = null;
-    private String pluginVersion = "1.1.2";
+    private String pluginVersion = "1.1.3";
     private final String installationId;
 
     public McStatCore(McStatConfig config, Path dataDirectory, Logger logger) {
