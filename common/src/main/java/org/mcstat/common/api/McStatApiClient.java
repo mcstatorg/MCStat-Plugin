@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import javax.crypto.Mac;
@@ -19,6 +21,8 @@ import javax.crypto.spec.SecretKeySpec;
 public class McStatApiClient {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
+    private static final long WARNING_THROTTLE_MS = 60_000L;
+    private static final int MAX_RESPONSE_DETAIL_LENGTH = 240;
 
     private final OkHttpClient httpClient;
     private final String baseUrl;
@@ -26,6 +30,9 @@ public class McStatApiClient {
     private final String installationId;
     private final Gson gson;
     private final Logger logger;
+    private final Object warningLock = new Object();
+    private final Map<String, Long> lastWarningAt = new HashMap<>();
+    private final Map<String, Integer> suppressedWarnings = new HashMap<>();
 
     public McStatApiClient(McStatConfig config, String installationId, Logger logger) {
         this.baseUrl = config.getApiBaseUrl();
@@ -164,7 +171,7 @@ public class McStatApiClient {
         httpClient.newCall(request).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                logger.warning("[McStat] " + eventType + " send failed: " + e.getMessage());
+                logThrottledWarning(eventType + ":io", "[McStat] " + eventType + " send failed: " + safeMessage(e));
                 if (callback != null) callback.onFailure(e);
             }
 
@@ -182,14 +189,54 @@ public class McStatApiClient {
                 if (response.isSuccessful()) {
                     if (callback != null) callback.onSuccess();
                 } else {
-                    String detail = responseBody.isEmpty() ? "" : " - " + responseBody;
-                    logger.warning("[McStat] " + eventType + " rejected: HTTP " + status + detail);
+                    String detail = formatResponseDetail(responseBody);
+                    logThrottledWarning(eventType + ":http:" + status,
+                            "[McStat] " + eventType + " rejected: HTTP " + status + detail);
                     if (isRetryableStatus(status) && callback != null) {
                         callback.onFailure(new IOException("HTTP " + status + detail));
                     }
                 }
             }
         });
+    }
+
+    private void logThrottledWarning(String key, String message) {
+        long now = System.currentTimeMillis();
+        synchronized (warningLock) {
+            Long lastLog = lastWarningAt.get(key);
+            if (lastLog == null || now - lastLog >= WARNING_THROTTLE_MS) {
+                int suppressed = suppressedWarnings.containsKey(key) ? suppressedWarnings.remove(key) : 0;
+                lastWarningAt.put(key, now);
+                if (suppressed > 0) {
+                    logger.warning(message + " (suppressed " + suppressed + " similar warnings in the last 60s)");
+                } else {
+                    logger.warning(message);
+                }
+                return;
+            }
+
+            Integer count = suppressedWarnings.get(key);
+            suppressedWarnings.put(key, count == null ? 1 : count + 1);
+        }
+    }
+
+    private String formatResponseDetail(String responseBody) {
+        if (responseBody == null || responseBody.trim().isEmpty()) {
+            return "";
+        }
+
+        String detail = responseBody.replaceAll("\\s+", " ").trim();
+        if (detail.length() > MAX_RESPONSE_DETAIL_LENGTH) {
+            detail = detail.substring(0, MAX_RESPONSE_DETAIL_LENGTH) + "...";
+        }
+        return " - " + detail;
+    }
+
+    private String safeMessage(Exception e) {
+        if (e == null || e.getMessage() == null || e.getMessage().trim().isEmpty()) {
+            return "unknown error";
+        }
+        return e.getMessage();
     }
 
     private boolean isRetryableStatus(int status) {
