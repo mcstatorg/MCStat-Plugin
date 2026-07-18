@@ -22,7 +22,7 @@ import java.util.logging.Logger;
 @Plugin(
         id = "mcstat",
         name = "McStat",
-        version = "1.1.0",
+        version = "1.1.1",
         description = "Server statistics tracking for mcstat.org",
         authors = {"McStat"},
         url = "https://mcstat.org"
@@ -62,7 +62,7 @@ public class McStatVelocityPlugin {
 
         server.getEventManager().register(this, new VelocityPlayerListener(core));
 
-        core.setPluginVersion("1.1.0");
+        core.setPluginVersion("1.1.1");
 
         commandHandler = new McStatCommandHandler(core);
         server.getCommandManager().register(
@@ -97,7 +97,14 @@ public class McStatVelocityPlugin {
             if (invocation.arguments().length > 0
                     && invocation.arguments()[0].equalsIgnoreCase("reload")) {
                 McStatConfig newConfig = VelocityConfigLoader.load(dataDirectory, logger);
-                source.sendMessage(legacyText("§6[McStat] §aConfiguration reloaded!"));
+                boolean connected = core.reload(newConfig);
+                if (connected) {
+                    source.sendMessage(legacyText("§6[McStat] §aConfiguration reloaded and API connection verified!"));
+                } else if (newConfig.isValid()) {
+                    source.sendMessage(legacyText("§6[McStat] §eConfiguration reloaded, but API connection could not be verified yet. Heartbeats will retry automatically."));
+                } else {
+                    source.sendMessage(legacyText("§6[McStat] §cConfiguration reloaded, but api-key is not configured."));
+                }
                 return;
             }
 

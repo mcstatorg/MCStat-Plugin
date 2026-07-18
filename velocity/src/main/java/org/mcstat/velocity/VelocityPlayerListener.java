@@ -3,7 +3,6 @@ package org.mcstat.velocity;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.LoginEvent;
-import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import org.mcstat.common.McStatCore;
 
 public class VelocityPlayerListener {
@@ -32,13 +31,4 @@ public class VelocityPlayerListener {
         );
     }
 
-    @Subscribe
-    public void onServerConnected(ServerConnectedEvent event) {
-        String subServer = event.getServer().getServerInfo().getName();
-        core.onPlayerJoin(
-                event.getPlayer().getUniqueId(),
-                event.getPlayer().getUsername(),
-                subServer
-        );
-    }
 }

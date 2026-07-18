@@ -19,10 +19,16 @@ public class McStatConfig {
     }
 
     public String getApiKey() { return apiKey; }
-    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    public void setApiKey(String apiKey) { this.apiKey = apiKey != null ? apiKey.trim() : null; }
 
     public String getApiBaseUrl() { return apiBaseUrl; }
-    public void setApiBaseUrl(String apiBaseUrl) { this.apiBaseUrl = apiBaseUrl; }
+    public void setApiBaseUrl(String apiBaseUrl) {
+        String normalized = apiBaseUrl != null ? apiBaseUrl.trim() : "";
+        while (normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        this.apiBaseUrl = normalized.isEmpty() ? "https://mcstat.org" : normalized;
+    }
 
     public int getSyncIntervalSeconds() { return syncIntervalSeconds; }
     public void setSyncIntervalSeconds(int syncIntervalSeconds) {
@@ -39,9 +45,19 @@ public class McStatConfig {
     public void setSendPlayerEvents(boolean sendPlayerEvents) { this.sendPlayerEvents = sendPlayerEvents; }
 
     public String getVoteUrl() { return voteUrl; }
-    public void setVoteUrl(String voteUrl) { this.voteUrl = voteUrl; }
+    public void setVoteUrl(String voteUrl) { this.voteUrl = voteUrl != null ? voteUrl.trim() : null; }
 
     public boolean isValid() {
         return apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY_HERE");
+    }
+
+    public void copyFrom(McStatConfig other) {
+        setApiKey(other.getApiKey());
+        setApiBaseUrl(other.getApiBaseUrl());
+        setSyncIntervalSeconds(other.getSyncIntervalSeconds());
+        setTrackPlayerTime(other.isTrackPlayerTime());
+        setSendTps(other.isSendTps());
+        setSendPlayerEvents(other.isSendPlayerEvents());
+        setVoteUrl(other.getVoteUrl());
     }
 }
