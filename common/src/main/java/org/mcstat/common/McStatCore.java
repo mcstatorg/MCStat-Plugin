@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
@@ -21,7 +22,7 @@ import java.util.logging.Logger;
 public class McStatCore {
 
     private final McStatConfig config;
-    private final McStatApiClient apiClient;
+    private McStatApiClient apiClient;
     private final DataQueue dataQueue;
     private final PlayerTracker playerTracker;
     private final Logger logger;
@@ -29,10 +30,11 @@ public class McStatCore {
     private final long startTime;
 
     private Supplier<ServerHeartbeat> heartbeatSupplier;
-    private boolean apiKeyValid = false;
-    private String serverName = "Unknown";
-    private String serverSlug = null;
-    private String pluginVersion = "1.1.0";
+    private ScheduledFuture<?> heartbeatTask;
+    private volatile boolean apiKeyValid = false;
+    private volatile String serverName = "Unknown";
+    private volatile String serverSlug = null;
+    private String pluginVersion = "1.1.1";
     private final String installationId;
 
     public McStatCore(McStatConfig config, Path dataDirectory, Logger logger) {
@@ -53,6 +55,7 @@ public class McStatCore {
     private String loadOrCreateInstallationId(Path dataDirectory) {
         Path file = dataDirectory.resolve("installation.id");
         try {
+            Files.createDirectories(dataDirectory);
             if (Files.exists(file)) {
                 return new String(Files.readAllBytes(file), StandardCharsets.UTF_8).trim();
             }
@@ -65,7 +68,7 @@ public class McStatCore {
         }
     }
 
-    public void enable() {
+    public synchronized void enable() {
         logger.info("========================================");
         logger.info("  McStat Plugin v" + pluginVersion);
         logger.info("  https://mcstat.org");
@@ -77,31 +80,22 @@ public class McStatCore {
             return;
         }
 
-        logger.info("[McStat] Validating API key...");
-        apiKeyValid = apiClient.validateApiKey();
-        if (apiKeyValid) {
-            logger.info("[McStat] API key validated successfully");
-            serverSlug = apiClient.validateAndGetServerSlug();
-            if (serverSlug != null) {
-                logger.info("[McStat] Server slug: " + serverSlug);
-            }
-        } else {
-            logger.warning("[McStat] API key validation failed - will retry on next heartbeat");
-        }
-
-        scheduler.scheduleAtFixedRate(this::sendHeartbeat,
-                config.getSyncIntervalSeconds(),
-                config.getSyncIntervalSeconds(),
-                TimeUnit.SECONDS);
+        validateConnection();
+        scheduleHeartbeat();
 
         logger.info("[McStat] Plugin enabled - sending data every "
                 + config.getSyncIntervalSeconds() + "s");
     }
 
-    public void disable() {
+    public synchronized void disable() {
         logger.info("[McStat] Shutting down...");
 
         playerTracker.saveAllSessions();
+
+        if (heartbeatTask != null) {
+            heartbeatTask.cancel(false);
+            heartbeatTask = null;
+        }
 
         scheduler.shutdown();
         try {
@@ -114,17 +108,21 @@ public class McStatCore {
     }
 
     public void onPlayerJoin(UUID uuid, String name, String serverName) {
-        playerTracker.startSession(uuid, name);
+        if (config.isTrackPlayerTime()) {
+            playerTracker.startSession(uuid, name);
+        }
 
-        if (config.isSendPlayerEvents()) {
+        if (config.isSendPlayerEvents() && config.isValid() && apiKeyValid) {
             apiClient.sendPlayerJoin(uuid.toString(), name, null);
         }
     }
 
     public void onPlayerLeave(UUID uuid, String name, String serverName) {
-        playerTracker.endSession(uuid);
+        if (config.isTrackPlayerTime()) {
+            playerTracker.endSession(uuid);
+        }
 
-        if (config.isSendPlayerEvents()) {
+        if (config.isSendPlayerEvents() && config.isValid() && apiKeyValid) {
             apiClient.sendPlayerLeave(uuid.toString(), null);
         }
     }
@@ -139,11 +137,12 @@ public class McStatCore {
 
     private void sendHeartbeat() {
         try {
+            McStatApiClient currentClient = apiClient;
             if (!apiKeyValid) {
-                apiKeyValid = apiClient.validateApiKey();
+                apiKeyValid = currentClient.validateApiKey();
                 if (!apiKeyValid) return;
                 logger.info("[McStat] API key validated successfully");
-                serverSlug = apiClient.validateAndGetServerSlug();
+                serverSlug = currentClient.validateAndGetServerSlug();
                 if (serverSlug != null) {
                     logger.info("[McStat] Server slug: " + serverSlug);
                 }
@@ -158,13 +157,15 @@ public class McStatCore {
 
             heartbeat.setTimestamp(System.currentTimeMillis());
             heartbeat.setUptimeMillis(System.currentTimeMillis() - startTime);
-            heartbeat.setPlayers(playerTracker.getOnlinePlayers());
+            if (config.isTrackPlayerTime()) {
+                heartbeat.setPlayers(playerTracker.getOnlinePlayers());
+            }
 
             if (!dataQueue.isEmpty()) {
                 List<ServerHeartbeat> queued = dataQueue.drainAll();
                 queued.add(heartbeat);
                 for (ServerHeartbeat hb : queued) {
-                    apiClient.sendServerStats(hb, new McStatApiClient.ApiCallback() {
+                    currentClient.sendServerStats(hb, new McStatApiClient.ApiCallback() {
                         @Override
                         public void onSuccess() {}
 
@@ -175,7 +176,7 @@ public class McStatCore {
                     });
                 }
             } else {
-                apiClient.sendServerStats(heartbeat, new McStatApiClient.ApiCallback() {
+                currentClient.sendServerStats(heartbeat, new McStatApiClient.ApiCallback() {
                     @Override
                     public void onSuccess() {}
 
@@ -187,6 +188,62 @@ public class McStatCore {
             }
         } catch (Exception e) {
             logger.warning("[McStat] Error building heartbeat: " + e.getMessage());
+        }
+    }
+
+    public synchronized boolean reload(McStatConfig newConfig) {
+        boolean wasTrackingPlayTime = config.isTrackPlayerTime();
+        config.copyFrom(newConfig);
+
+        McStatApiClient oldClient = apiClient;
+        apiClient = new McStatApiClient(config, installationId, logger);
+        oldClient.shutdown();
+
+        apiKeyValid = false;
+        serverSlug = null;
+
+        if (wasTrackingPlayTime && !config.isTrackPlayerTime()) {
+            playerTracker.saveAllSessions();
+        }
+
+        if (!config.isValid()) {
+            cancelHeartbeat();
+            logger.warning("[McStat] Configuration reloaded, but API key is not configured.");
+            return false;
+        }
+
+        validateConnection();
+        scheduleHeartbeat();
+        logger.info("[McStat] Configuration reloaded.");
+        return apiKeyValid;
+    }
+
+    private void validateConnection() {
+        logger.info("[McStat] Validating API key...");
+        apiKeyValid = apiClient.validateApiKey();
+        if (apiKeyValid) {
+            logger.info("[McStat] API key validated successfully");
+            serverSlug = apiClient.validateAndGetServerSlug();
+            if (serverSlug != null) {
+                logger.info("[McStat] Server slug: " + serverSlug);
+            }
+        } else {
+            logger.warning("[McStat] API key validation failed - will retry on next heartbeat");
+        }
+    }
+
+    private void scheduleHeartbeat() {
+        cancelHeartbeat();
+        heartbeatTask = scheduler.scheduleAtFixedRate(this::sendHeartbeat,
+                config.getSyncIntervalSeconds(),
+                config.getSyncIntervalSeconds(),
+                TimeUnit.SECONDS);
+    }
+
+    private void cancelHeartbeat() {
+        if (heartbeatTask != null) {
+            heartbeatTask.cancel(false);
+            heartbeatTask = null;
         }
     }
 

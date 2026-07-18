@@ -41,7 +41,14 @@ public class McStatBungeePlugin extends Plugin {
             public void execute(CommandSender sender, String[] args) {
                 if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
                     McStatConfig newConfig = BungeeConfigLoader.load(McStatBungeePlugin.this);
-                    sender.sendMessage(new TextComponent("§6[McStat] §aConfiguration reloaded!"));
+                    boolean connected = core.reload(newConfig);
+                    if (connected) {
+                        sender.sendMessage(new TextComponent("§6[McStat] §aConfiguration reloaded and API connection verified!"));
+                    } else if (newConfig.isValid()) {
+                        sender.sendMessage(new TextComponent("§6[McStat] §eConfiguration reloaded, but API connection could not be verified yet. Heartbeats will retry automatically."));
+                    } else {
+                        sender.sendMessage(new TextComponent("§6[McStat] §cConfiguration reloaded, but api-key is not configured."));
+                    }
                     return;
                 }
 

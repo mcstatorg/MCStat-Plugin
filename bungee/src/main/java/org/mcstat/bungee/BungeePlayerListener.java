@@ -2,7 +2,6 @@ package org.mcstat.bungee;
 
 import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.event.PostLoginEvent;
-import net.md_5.bungee.api.event.ServerConnectedEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
 import org.mcstat.common.McStatCore;
@@ -33,13 +32,4 @@ public class BungeePlayerListener implements Listener {
         );
     }
 
-    @EventHandler
-    public void onServerConnected(ServerConnectedEvent event) {
-        String subServer = event.getServer().getInfo().getName();
-        core.onPlayerJoin(
-                event.getPlayer().getUniqueId(),
-                event.getPlayer().getName(),
-                subServer
-        );
-    }
 }
