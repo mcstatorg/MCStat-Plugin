@@ -170,16 +170,30 @@ public class McStatApiClient {
 
             @Override
             public void onResponse(Call call, Response response) {
-                response.close();
+                int status = response.code();
+                String responseBody = "";
+                try {
+                    responseBody = response.body() != null ? response.body().string() : "";
+                } catch (IOException ignored) {
+                    responseBody = "";
+                } finally {
+                    response.close();
+                }
                 if (response.isSuccessful()) {
                     if (callback != null) callback.onSuccess();
                 } else {
-                    logger.warning("[McStat] " + eventType + " rejected: HTTP " + response.code());
-                    if (callback != null) callback.onFailure(
-                            new IOException("HTTP " + response.code()));
+                    String detail = responseBody.isEmpty() ? "" : " - " + responseBody;
+                    logger.warning("[McStat] " + eventType + " rejected: HTTP " + status + detail);
+                    if (isRetryableStatus(status) && callback != null) {
+                        callback.onFailure(new IOException("HTTP " + status + detail));
+                    }
                 }
             }
         });
+    }
+
+    private boolean isRetryableStatus(int status) {
+        return status == 408 || status == 429 || status >= 500;
     }
 
     private String computeSignature(String method, String path, String body, long timestamp) {

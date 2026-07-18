@@ -28,6 +28,15 @@ public class DataQueue {
         return drained;
     }
 
+    public List<ServerHeartbeat> drainUpTo(int maxItems) {
+        List<ServerHeartbeat> drained = new ArrayList<>();
+        ServerHeartbeat hb;
+        while (drained.size() < maxItems && (hb = pendingHeartbeats.poll()) != null) {
+            drained.add(hb);
+        }
+        return drained;
+    }
+
     public int size() {
         return pendingHeartbeats.size();
     }
