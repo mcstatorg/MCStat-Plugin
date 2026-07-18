@@ -24,6 +24,8 @@ public class McStatCommandHandler {
                 return getLinkMessage();
             case "reload":
                 return null;
+            case "update":
+                return getUpdateMessage(args);
             default:
                 return getHelpMessage();
         }
@@ -45,7 +47,8 @@ public class McStatCommandHandler {
         sb.append("§7Uptime: §f").append(hours).append("h ").append(minutes).append("m ").append(seconds).append("s\n");
         sb.append("§7Queue: §f").append(queueSize).append(" pending\n");
         sb.append("§7Tracked Players: §f").append(onlinePlayers).append("\n");
-        sb.append("§7Version: §f").append(core.getPluginVersion());
+        sb.append("§7Version: §f").append(core.getPluginVersion()).append("\n");
+        sb.append("§7Updates: §f").append(core.getUpdateStatusMessage());
 
         return sb.toString();
     }
@@ -62,6 +65,13 @@ public class McStatCommandHandler {
         }
         sb.append("§7Dashboard: §bhttps://mcstat.org/dashboard");
         return sb.toString();
+    }
+
+    private String getUpdateMessage(String[] args) {
+        if (args.length >= 2 && args[1].equalsIgnoreCase("download")) {
+            return core.checkForUpdates(true);
+        }
+        return core.checkForUpdates(false);
     }
 
     public String getVoteMessage() {
@@ -90,6 +100,8 @@ public class McStatCommandHandler {
         sb.append("§6§l[McStat] §eCommands\n");
         sb.append("§e/mcstat status §7- Connection status & stats\n");
         sb.append("§e/mcstat reload §7- Reload configuration\n");
+        sb.append("§e/mcstat update §7- Check for plugin updates\n");
+        sb.append("§e/mcstat update download §7- Download the latest jar safely\n");
         sb.append("§e/mcstat link §7- API key info & dashboard link\n");
         sb.append("§e/vote §7- Sunucumuza oy ver");
         return sb.toString();

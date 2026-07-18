@@ -18,3 +18,11 @@ metrics:
   player-names: true
   player-playtime: true
   player-events: true
+
+# Update checks use the official GitHub Releases feed.
+# auto-download keeps the new jar in plugins/MCStat/updates and never hot-swaps a running server.
+updates:
+  check: true
+  notify-admins: true
+  auto-download: false
+  check-interval-hours: 24

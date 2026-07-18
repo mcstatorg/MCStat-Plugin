@@ -22,7 +22,7 @@ import java.util.logging.Logger;
 @Plugin(
         id = "mcstat",
         name = "McStat",
-        version = "1.1.3",
+        version = "1.1.4",
         description = "Server statistics tracking for mcstat.org",
         authors = {"McStat"},
         url = "https://mcstat.org"
@@ -62,7 +62,8 @@ public class McStatVelocityPlugin {
 
         server.getEventManager().register(this, new VelocityPlayerListener(core));
 
-        core.setPluginVersion("1.1.3");
+        core.setPluginVersion("1.1.4");
+        core.configureUpdater("McStat-Velocity", dataDirectory);
 
         commandHandler = new McStatCommandHandler(core);
         server.getCommandManager().register(

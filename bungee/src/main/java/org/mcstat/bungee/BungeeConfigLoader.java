@@ -37,6 +37,10 @@ public class BungeeConfigLoader {
             mcConfig.setSendTps(false);
             mcConfig.setTrackPlayerTime(config.getBoolean("metrics.player-playtime", true));
             mcConfig.setSendPlayerEvents(config.getBoolean("metrics.player-events", true));
+            mcConfig.setUpdateChecksEnabled(config.getBoolean("updates.check", true));
+            mcConfig.setUpdateNotifyAdmins(config.getBoolean("updates.notify-admins", true));
+            mcConfig.setUpdateAutoDownload(config.getBoolean("updates.auto-download", false));
+            mcConfig.setUpdateCheckIntervalHours(config.getInt("updates.check-interval-hours", 24));
             String voteUrl = config.getString("vote-url");
             if (voteUrl != null && !voteUrl.isEmpty()) {
                 mcConfig.setVoteUrl(voteUrl);
