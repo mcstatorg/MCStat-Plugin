@@ -41,6 +41,7 @@ public class McStatSpigotPlugin extends JavaPlugin {
                 new SpigotPlayerListener(core, serverName), this);
 
         core.setPluginVersion(getDescription().getVersion());
+        core.configureUpdater("McStat-Spigot", getDataFolder().toPath());
         core.enable();
 
         commandHandler = new McStatCommandHandler(core);

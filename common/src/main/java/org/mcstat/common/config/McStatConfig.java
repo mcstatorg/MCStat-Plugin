@@ -9,6 +9,10 @@ public class McStatConfig {
     private boolean sendTps;
     private boolean sendPlayerEvents;
     private String voteUrl;
+    private boolean updateChecksEnabled;
+    private boolean updateNotifyAdmins;
+    private boolean updateAutoDownload;
+    private int updateCheckIntervalHours;
 
     public McStatConfig() {
         this.apiBaseUrl = "https://mcstat.org";
@@ -16,6 +20,10 @@ public class McStatConfig {
         this.trackPlayerTime = true;
         this.sendTps = true;
         this.sendPlayerEvents = true;
+        this.updateChecksEnabled = true;
+        this.updateNotifyAdmins = true;
+        this.updateAutoDownload = false;
+        this.updateCheckIntervalHours = 24;
     }
 
     public String getApiKey() { return apiKey; }
@@ -47,6 +55,20 @@ public class McStatConfig {
     public String getVoteUrl() { return voteUrl; }
     public void setVoteUrl(String voteUrl) { this.voteUrl = voteUrl != null ? voteUrl.trim() : null; }
 
+    public boolean isUpdateChecksEnabled() { return updateChecksEnabled; }
+    public void setUpdateChecksEnabled(boolean updateChecksEnabled) { this.updateChecksEnabled = updateChecksEnabled; }
+
+    public boolean isUpdateNotifyAdmins() { return updateNotifyAdmins; }
+    public void setUpdateNotifyAdmins(boolean updateNotifyAdmins) { this.updateNotifyAdmins = updateNotifyAdmins; }
+
+    public boolean isUpdateAutoDownload() { return updateAutoDownload; }
+    public void setUpdateAutoDownload(boolean updateAutoDownload) { this.updateAutoDownload = updateAutoDownload; }
+
+    public int getUpdateCheckIntervalHours() { return updateCheckIntervalHours; }
+    public void setUpdateCheckIntervalHours(int updateCheckIntervalHours) {
+        this.updateCheckIntervalHours = Math.max(1, updateCheckIntervalHours);
+    }
+
     public boolean isValid() {
         return apiKey != null && !apiKey.isEmpty() && !apiKey.equals("YOUR_API_KEY_HERE");
     }
@@ -59,5 +81,9 @@ public class McStatConfig {
         setSendTps(other.isSendTps());
         setSendPlayerEvents(other.isSendPlayerEvents());
         setVoteUrl(other.getVoteUrl());
+        setUpdateChecksEnabled(other.isUpdateChecksEnabled());
+        setUpdateNotifyAdmins(other.isUpdateNotifyAdmins());
+        setUpdateAutoDownload(other.isUpdateAutoDownload());
+        setUpdateCheckIntervalHours(other.getUpdateCheckIntervalHours());
     }
 }

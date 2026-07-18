@@ -9,7 +9,7 @@ website: https://mcstat.org
 commands:
   mcstat:
     description: McStat plugin commands
-    usage: /mcstat [status|reload|link]
+    usage: /mcstat [status|reload|link|update]
     permission: mcstat.admin
   vote:
     description: Sunucumuza oy ver

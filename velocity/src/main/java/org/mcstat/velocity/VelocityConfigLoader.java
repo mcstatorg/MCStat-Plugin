@@ -34,6 +34,13 @@ public class VelocityConfigLoader {
                 metrics.addProperty("player-events", true);
                 defaults.add("metrics", metrics);
 
+                JsonObject updates = new JsonObject();
+                updates.addProperty("check", true);
+                updates.addProperty("notify-admins", true);
+                updates.addProperty("auto-download", false);
+                updates.addProperty("check-interval-hours", 24);
+                defaults.add("updates", updates);
+
                 try (Writer writer = new OutputStreamWriter(
                         Files.newOutputStream(configFile), StandardCharsets.UTF_8)) {
                     new Gson().toJson(defaults, writer);
@@ -59,6 +66,18 @@ public class VelocityConfigLoader {
                         mcConfig.setTrackPlayerTime(metrics.get("player-playtime").getAsBoolean());
                     if (metrics.has("player-events"))
                         mcConfig.setSendPlayerEvents(metrics.get("player-events").getAsBoolean());
+                }
+
+                if (config.has("updates")) {
+                    JsonObject updates = config.getAsJsonObject("updates");
+                    if (updates.has("check"))
+                        mcConfig.setUpdateChecksEnabled(updates.get("check").getAsBoolean());
+                    if (updates.has("notify-admins"))
+                        mcConfig.setUpdateNotifyAdmins(updates.get("notify-admins").getAsBoolean());
+                    if (updates.has("auto-download"))
+                        mcConfig.setUpdateAutoDownload(updates.get("auto-download").getAsBoolean());
+                    if (updates.has("check-interval-hours"))
+                        mcConfig.setUpdateCheckIntervalHours(updates.get("check-interval-hours").getAsInt());
                 }
             }
         } catch (IOException e) {

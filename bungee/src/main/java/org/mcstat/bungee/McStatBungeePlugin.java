@@ -35,6 +35,7 @@ public class McStatBungeePlugin extends Plugin {
         getProxy().getPluginManager().registerListener(this, new BungeePlayerListener(core));
 
         core.setPluginVersion(getDescription().getVersion());
+        core.configureUpdater("McStat-BungeeCord", getDataFolder().toPath());
 
         getProxy().getPluginManager().registerCommand(this, new Command("mcstat", "mcstat.admin") {
             @Override

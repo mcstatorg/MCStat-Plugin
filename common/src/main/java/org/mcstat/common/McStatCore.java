@@ -5,6 +5,7 @@ import org.mcstat.common.config.McStatConfig;
 import org.mcstat.common.model.*;
 import org.mcstat.common.queue.DataQueue;
 import org.mcstat.common.tracker.PlayerTracker;
+import org.mcstat.common.update.McStatUpdateService;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -31,11 +32,13 @@ public class McStatCore {
 
     private Supplier<ServerHeartbeat> heartbeatSupplier;
     private ScheduledFuture<?> heartbeatTask;
+    private ScheduledFuture<?> updateTask;
     private volatile boolean apiKeyValid = false;
     private volatile String serverName = "Unknown";
     private volatile String serverSlug = null;
-    private String pluginVersion = "1.1.3";
+    private String pluginVersion = "1.1.4";
     private final String installationId;
+    private McStatUpdateService updateService;
 
     public McStatCore(McStatConfig config, Path dataDirectory, Logger logger) {
         this.config = config;
@@ -74,6 +77,8 @@ public class McStatCore {
         logger.info("  https://mcstat.org");
         logger.info("========================================");
 
+        scheduleUpdateChecks();
+
         if (!config.isValid()) {
             logger.warning("[McStat] Invalid API key! Please set your API key in config.yml");
             logger.warning("[McStat] Get your API key at https://mcstat.org/dashboard");
@@ -97,12 +102,20 @@ public class McStatCore {
             heartbeatTask = null;
         }
 
+        if (updateTask != null) {
+            updateTask.cancel(false);
+            updateTask = null;
+        }
+
         scheduler.shutdown();
         try {
             scheduler.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {}
 
         apiClient.shutdown();
+        if (updateService != null) {
+            updateService.shutdown();
+        }
 
         logger.info("[McStat] Plugin disabled");
     }
@@ -212,12 +225,14 @@ public class McStatCore {
 
         if (!config.isValid()) {
             cancelHeartbeat();
+            scheduleUpdateChecks();
             logger.warning("[McStat] Configuration reloaded, but API key is not configured.");
             return false;
         }
 
         validateConnection();
         scheduleHeartbeat();
+        scheduleUpdateChecks();
         logger.info("[McStat] Configuration reloaded.");
         return apiKeyValid;
     }
@@ -251,8 +266,102 @@ public class McStatCore {
         }
     }
 
+    private void scheduleUpdateChecks() {
+        cancelUpdateChecks();
+        if (updateService == null || !config.isUpdateChecksEnabled()) {
+            return;
+        }
+
+        long intervalHours = config.getUpdateCheckIntervalHours();
+        updateTask = scheduler.scheduleAtFixedRate(() -> runUpdateCheck(config.isUpdateAutoDownload(), true),
+                10,
+                TimeUnit.HOURS.toSeconds(intervalHours),
+                TimeUnit.SECONDS);
+    }
+
+    private void cancelUpdateChecks() {
+        if (updateTask != null) {
+            updateTask.cancel(false);
+            updateTask = null;
+        }
+    }
+
+    private void runUpdateCheck(boolean download, boolean background) {
+        if (updateService == null) {
+            return;
+        }
+
+        try {
+            McStatUpdateService.UpdateInfo info = updateService.check(pluginVersion);
+            if (!info.isUpdateAvailable()) {
+                if (!background) {
+                    logger.info("[McStat] " + info.getSummary());
+                }
+                return;
+            }
+
+            if (config.isUpdateNotifyAdmins()) {
+                logger.warning("[McStat] " + info.getSummary() + " Release: " + info.getReleaseUrl());
+            }
+
+            if (download) {
+                Path downloaded = updateService.download(info);
+                logger.warning("[McStat] Update downloaded to " + downloaded
+                        + ". Stop the server, replace the old jar, then start it again.");
+            }
+        } catch (Exception e) {
+            if (!background) {
+                logger.warning("[McStat] Update check failed: " + e.getMessage());
+            }
+        }
+    }
+
+    public synchronized String checkForUpdates(boolean download) {
+        if (updateService == null) {
+            return "§6[McStat] §cUpdate checker is not available for this platform.";
+        }
+
+        try {
+            McStatUpdateService.UpdateInfo info = updateService.check(pluginVersion);
+            if (!info.isUpdateAvailable()) {
+                return "§6[McStat] §a" + info.getSummary();
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("§6[McStat] §e").append(info.getSummary()).append("\n");
+            sb.append("§7Release: §b").append(info.getReleaseUrl()).append("\n");
+
+            if (download) {
+                Path downloaded = updateService.download(info);
+                sb.append("§aDownloaded: §f").append(downloaded).append("\n");
+                sb.append("§7Stop the server, replace the old jar, then start it again.");
+            } else if (info.canDownload()) {
+                sb.append("§7Run §e/mcstat update download §7to download it safely.");
+            } else {
+                sb.append("§cThe release is missing the expected jar asset.");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "§6[McStat] §cUpdate check failed: " + e.getMessage();
+        }
+    }
+
+    public String getUpdateStatusMessage() {
+        if (updateService == null) {
+            return "Update checker is not available.";
+        }
+        return updateService.getLastMessage();
+    }
+
     public void setPluginVersion(String version) {
         this.pluginVersion = version;
+    }
+
+    public void configureUpdater(String artifactPrefix, Path dataDirectory) {
+        if (artifactPrefix == null || artifactPrefix.trim().isEmpty() || dataDirectory == null) {
+            return;
+        }
+        this.updateService = new McStatUpdateService(artifactPrefix.trim(), dataDirectory.resolve("updates"), logger);
     }
 
     public String getPluginVersion() { return pluginVersion; }
