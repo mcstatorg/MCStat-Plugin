@@ -6,9 +6,9 @@ MCStat connects Minecraft servers and proxy networks to https://mcstat.org with 
 
 | Package | Use it for |
 | --- | --- |
-| `McStat-Spigot-1.1.1.jar` | Bukkit, CraftBukkit, Spigot, Paper, Purpur, Pufferfish, Folia, and Bukkit-compatible hybrid servers such as Mohist, Arclight, Magma, and CatServer |
-| `McStat-Velocity-1.1.1.jar` | Velocity 3.x proxy networks |
-| `McStat-BungeeCord-1.1.1.jar` | BungeeCord and Waterfall proxy networks |
+| `McStat-Spigot-1.1.2.jar` | Bukkit, CraftBukkit, Spigot, Paper, Purpur, Pufferfish, Folia, and Bukkit-compatible hybrid servers such as Mohist, Arclight, Magma, and CatServer |
+| `McStat-Velocity-1.1.2.jar` | Velocity 3.x proxy networks |
+| `McStat-BungeeCord-1.1.2.jar` | BungeeCord and Waterfall proxy networks |
 
 Pure Fabric, Quilt, Forge, NeoForge, or Sponge servers need a native platform adapter unless they run a Bukkit-compatible hybrid layer. The shared `common` module exists so those adapters can reuse the same API client, queue, command, and telemetry model.
 
@@ -29,9 +29,9 @@ mvn clean package
 
 Compiled jars are written to each module's `target/` directory:
 
-- `spigot/target/McStat-Spigot-1.1.1.jar`
-- `velocity/target/McStat-Velocity-1.1.1.jar`
-- `bungee/target/McStat-BungeeCord-1.1.1.jar`
+- `spigot/target/McStat-Spigot-1.1.2.jar`
+- `velocity/target/McStat-Velocity-1.1.2.jar`
+- `bungee/target/McStat-BungeeCord-1.1.2.jar`
 
 ## Install
 

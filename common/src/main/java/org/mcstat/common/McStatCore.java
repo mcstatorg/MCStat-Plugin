@@ -34,7 +34,7 @@ public class McStatCore {
     private volatile boolean apiKeyValid = false;
     private volatile String serverName = "Unknown";
     private volatile String serverSlug = null;
-    private String pluginVersion = "1.1.1";
+    private String pluginVersion = "1.1.2";
     private final String installationId;
 
     public McStatCore(McStatConfig config, Path dataDirectory, Logger logger) {
@@ -162,8 +162,12 @@ public class McStatCore {
             }
 
             if (!dataQueue.isEmpty()) {
-                List<ServerHeartbeat> queued = dataQueue.drainAll();
-                queued.add(heartbeat);
+                List<ServerHeartbeat> queued = dataQueue.drainUpTo(3);
+                if (queued.size() < 3) {
+                    queued.add(heartbeat);
+                } else {
+                    dataQueue.enqueue(heartbeat);
+                }
                 for (ServerHeartbeat hb : queued) {
                     currentClient.sendServerStats(hb, new McStatApiClient.ApiCallback() {
                         @Override
