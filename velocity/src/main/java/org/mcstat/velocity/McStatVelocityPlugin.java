@@ -22,12 +22,19 @@ import java.util.logging.Logger;
 @Plugin(
         id = "mcstat",
         name = "McStat",
-        version = "1.1.4",
+        version = McStatVelocityPlugin.VERSION,
         description = "Server statistics tracking for mcstat.org",
         authors = {"McStat"},
         url = "https://mcstat.org"
 )
 public class McStatVelocityPlugin {
+
+    // Velocity reads the version from an annotation, which needs a compile-time
+    // constant, so unlike Spigot and Bungee it cannot pick up ${project.version}
+    // from a descriptor. Keeping ONE constant here means a release bump cannot
+    // leave the jar reporting the previous version to the update checker and
+    // nagging about an update it already is.
+    public static final String VERSION = "1.1.5";
 
     private final ProxyServer server;
     private final Logger logger;
@@ -62,7 +69,7 @@ public class McStatVelocityPlugin {
 
         server.getEventManager().register(this, new VelocityPlayerListener(core));
 
-        core.setPluginVersion("1.1.4");
+        core.setPluginVersion(VERSION);
         core.configureUpdater("McStat-Velocity", dataDirectory);
 
         commandHandler = new McStatCommandHandler(core);

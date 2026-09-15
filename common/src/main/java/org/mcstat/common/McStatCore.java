@@ -36,7 +36,7 @@ public class McStatCore {
     private volatile boolean apiKeyValid = false;
     private volatile String serverName = "Unknown";
     private volatile String serverSlug = null;
-    private String pluginVersion = "1.1.4";
+    private String pluginVersion = "1.1.5";
     private final String installationId;
     private McStatUpdateService updateService;
 
