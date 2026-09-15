@@ -3,6 +3,7 @@ package org.mcstat.common.api;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import okhttp3.*;
+import okio.Buffer;
 import org.mcstat.common.config.McStatConfig;
 import org.mcstat.common.model.PlayerInfo;
 import org.mcstat.common.model.ServerHeartbeat;
@@ -45,19 +46,17 @@ public class McStatApiClient {
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .writeTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(10, TimeUnit.SECONDS)
+                .addInterceptor(this::signRequest)
                 .build();
     }
 
     public boolean validateApiKey() {
-        long timestamp = System.currentTimeMillis();
-        String signature = computeSignature("GET", "/api/v1/validate", null, timestamp);
-
+        // X-Timestamp / X-Signature are added by signRequest() at send time.
         Request request = new Request.Builder()
                 .url(baseUrl + "/api/v1/validate")
+                .tag(String.class, "/api/v1/validate")
                 .addHeader("X-API-Key", apiKey)
                 .addHeader("X-Installation-Id", installationId)
-                .addHeader("X-Timestamp", String.valueOf(timestamp))
-                .addHeader("X-Signature", signature)
                 .get()
                 .build();
 
@@ -70,15 +69,11 @@ public class McStatApiClient {
     }
 
     public String validateAndGetServerSlug() {
-        long timestamp = System.currentTimeMillis();
-        String signature = computeSignature("GET", "/api/v1/validate", null, timestamp);
-
         Request request = new Request.Builder()
                 .url(baseUrl + "/api/v1/validate")
+                .tag(String.class, "/api/v1/validate")
                 .addHeader("X-API-Key", apiKey)
                 .addHeader("X-Installation-Id", installationId)
-                .addHeader("X-Timestamp", String.valueOf(timestamp))
-                .addHeader("X-Signature", signature)
                 .get()
                 .build();
 
@@ -154,17 +149,13 @@ public class McStatApiClient {
 
     private void sendIngest(JsonObject payload, ApiCallback callback, String eventType) {
         String json = gson.toJson(payload);
-        long timestamp = System.currentTimeMillis();
-        String signature = computeSignature("POST", "/api/v1/ingest", json, timestamp);
-
         RequestBody body = RequestBody.create(json, JSON);
 
         Request request = new Request.Builder()
                 .url(baseUrl + "/api/v1/ingest")
+                .tag(String.class, "/api/v1/ingest")
                 .addHeader("X-API-Key", apiKey)
                 .addHeader("X-Installation-Id", installationId)
-                .addHeader("X-Timestamp", String.valueOf(timestamp))
-                .addHeader("X-Signature", signature)
                 .post(body)
                 .build();
 
@@ -241,6 +232,46 @@ public class McStatApiClient {
 
     private boolean isRetryableStatus(int status) {
         return status == 408 || status == 429 || status >= 500;
+    }
+
+    /**
+     * Stamps X-Timestamp and X-Signature at the moment the call actually goes
+     * out, not when it was built.
+     *
+     * OkHttp dispatches at most 5 calls per host concurrently; the rest wait in
+     * the dispatcher queue. When the API slowed down, calls built minutes
+     * earlier were still queued, and the server — which only accepts a
+     * timestamp inside a short window — answered 401 "Request timestamp
+     * expired". In the server console that reads as "server stats rejected:
+     * HTTP 401", i.e. an API key problem, for a key that was never wrong.
+     * Signing here means the stamp is always fresh no matter how long the call
+     * waited, and a retry re-signs itself instead of replaying a dead stamp.
+     */
+    private Response signRequest(Interceptor.Chain chain) throws IOException {
+        Request original = chain.request();
+        String body = "";
+        RequestBody originalBody = original.body();
+        if (originalBody != null) {
+            Buffer buffer = new Buffer();
+            originalBody.writeTo(buffer);
+            body = buffer.readString(StandardCharsets.UTF_8);
+        }
+
+        // Sign the canonical API path carried on the request tag, NOT
+        // url().encodedPath(). The server verifies against its own literal
+        // ("/api/v1/ingest"), so deriving the path from the URL would break the
+        // moment api-base-url carries a path prefix — the tag keeps this byte
+        // for byte identical to what the call sites signed before.
+        String signedPath = original.tag(String.class);
+        if (signedPath == null) signedPath = original.url().encodedPath();
+
+        long timestamp = System.currentTimeMillis();
+        Request signed = original.newBuilder()
+                .header("X-Timestamp", String.valueOf(timestamp))
+                .header("X-Signature", computeSignature(
+                        original.method(), signedPath, body, timestamp))
+                .build();
+        return chain.proceed(signed);
     }
 
     private String computeSignature(String method, String path, String body, long timestamp) {
