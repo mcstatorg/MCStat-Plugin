@@ -1,292 +1,181 @@
 package org.mcstat.common.api;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import okhttp3.*;
-import okio.Buffer;
 import org.mcstat.common.config.McStatConfig;
-import org.mcstat.common.model.PlayerInfo;
-import org.mcstat.common.model.ServerHeartbeat;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+/**
+ * HTTPS client for the MCStat plugin API (protocol v2).
+ *
+ * Every call is synchronous and made from the core's background thread; the
+ * caller decides what a failure means (retry later, drop, pause).
+ */
 public class McStatApiClient {
 
     private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
-    private static final long WARNING_THROTTLE_MS = 60_000L;
-    private static final int MAX_RESPONSE_DETAIL_LENGTH = 240;
+    private static final int MAX_DETAIL_LENGTH = 240;
+
+    /** What a request signs: the canonical API path and the uncompressed JSON body. */
+    private static final class Signed {
+        final String path;
+        final String body;
+
+        Signed(String path, String body) {
+            this.path = path;
+            this.body = body;
+        }
+    }
+
+    public static final class Response {
+        public final int status;
+        public final JsonObject data;
+        public final String detail;
+
+        Response(int status, JsonObject data, String detail) {
+            this.status = status;
+            this.data = data;
+            this.detail = detail;
+        }
+
+        public boolean ok() {
+            return status >= 200 && status < 300;
+        }
+
+        /** 0 (network error), 408, 429 and 5xx are worth retrying; other 4xx are not. */
+        public boolean retryable() {
+            return status == 0 || status == 408 || status == 429 || status >= 500;
+        }
+    }
 
     private final OkHttpClient httpClient;
     private final String baseUrl;
     private final String apiKey;
     private final String installationId;
-    private final Gson gson;
+    private final Gson gson = new Gson();
     private final Logger logger;
-    private final Object warningLock = new Object();
-    private final Map<String, Long> lastWarningAt = new HashMap<>();
-    private final Map<String, Integer> suppressedWarnings = new HashMap<>();
 
     public McStatApiClient(McStatConfig config, String installationId, Logger logger) {
         this.baseUrl = config.getApiBaseUrl();
         this.apiKey = config.getApiKey();
         this.installationId = installationId;
-        this.gson = new Gson();
         this.logger = logger;
-
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(10, TimeUnit.SECONDS)
-                .writeTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
+                .writeTimeout(20, TimeUnit.SECONDS)
+                .readTimeout(20, TimeUnit.SECONDS)
                 .addInterceptor(this::signRequest)
                 .build();
     }
 
-    public boolean validateApiKey() {
-        // X-Timestamp / X-Signature are added by signRequest() at send time.
-        Request request = new Request.Builder()
-                .url(baseUrl + "/api/v1/validate")
-                .tag(String.class, "/api/v1/validate")
-                .addHeader("X-API-Key", apiKey)
-                .addHeader("X-Installation-Id", installationId)
-                .get()
-                .build();
-
-        try (Response response = httpClient.newCall(request).execute()) {
-            return response.isSuccessful();
-        } catch (IOException e) {
-            logger.warning("[McStat] API key validation failed: " + e.getMessage());
-            return false;
-        }
+    public OkHttpClient http() {
+        return httpClient;
     }
 
-    public String validateAndGetServerSlug() {
-        Request request = new Request.Builder()
-                .url(baseUrl + "/api/v1/validate")
-                .tag(String.class, "/api/v1/validate")
-                .addHeader("X-API-Key", apiKey)
-                .addHeader("X-Installation-Id", installationId)
-                .get()
-                .build();
-
-        try (Response response = httpClient.newCall(request).execute()) {
-            if (!response.isSuccessful()) return null;
-            String body = response.body() != null ? response.body().string() : null;
-            if (body == null) return null;
-            JsonObject json = gson.fromJson(body, JsonObject.class);
-            if (json.has("server")) {
-                JsonObject server = json.getAsJsonObject("server");
-                if (server.has("slug")) {
-                    return server.get("slug").getAsString();
-                }
-            }
-            return null;
-        } catch (IOException e) {
-            logger.warning("[McStat] Failed to fetch server slug: " + e.getMessage());
-            return null;
-        }
+    /** GET /api/v1/validate — is the key valid, and which server is it for. */
+    public Response validate() {
+        Request request = base("/api/v1/validate", null).get().build();
+        return execute(request);
     }
 
-    public void sendServerStats(ServerHeartbeat heartbeat, ApiCallback callback) {
-        JsonObject payload = new JsonObject();
-        payload.addProperty("type", "server_stats");
-        payload.addProperty("timestamp", new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
-                .format(new java.util.Date(heartbeat.getTimestamp())));
-
-        JsonObject data = new JsonObject();
-        data.addProperty("onlinePlayers", heartbeat.getOnlinePlayers());
-        data.addProperty("maxPlayers", heartbeat.getMaxPlayers());
-        if (heartbeat.getTps() >= 0) {
-            data.addProperty("tps", heartbeat.getTps());
-        }
-        if (heartbeat.getPlayers() != null) {
-            com.google.gson.JsonArray players = new com.google.gson.JsonArray();
-            for (PlayerInfo player : heartbeat.getPlayers()) {
-                JsonObject playerJson = new JsonObject();
-                playerJson.addProperty("uuid", player.getUuid().toString());
-                playerJson.addProperty("name", player.getName());
-                playerJson.addProperty("sessionStartTime", player.getSessionStartTime());
-                playerJson.addProperty("totalPlayTimeMillis", player.getTotalPlayTimeMillis());
-                players.add(playerJson);
-            }
-            data.add("players", players);
-        }
-        payload.add("data", data);
-
-        sendIngest(payload, callback, "server stats");
-    }
-
-    public void sendPlayerJoin(String playerUuid, String playerName, ApiCallback callback) {
-        JsonObject payload = new JsonObject();
-        payload.addProperty("type", "player_join");
-
-        JsonObject data = new JsonObject();
-        data.addProperty("playerUuid", playerUuid);
-        data.addProperty("playerName", playerName);
-        payload.add("data", data);
-
-        sendIngest(payload, callback, "player join");
-    }
-
-    public void sendPlayerLeave(String playerUuid, ApiCallback callback) {
-        JsonObject payload = new JsonObject();
-        payload.addProperty("type", "player_leave");
-
-        JsonObject data = new JsonObject();
-        data.addProperty("playerUuid", playerUuid);
-        payload.add("data", data);
-
-        sendIngest(payload, callback, "player leave");
-    }
-
-    private void sendIngest(JsonObject payload, ApiCallback callback, String eventType) {
+    /** POST /api/v1/ingest/hello — handshake; the answer carries the remote config. */
+    public Response hello(JsonObject payload) {
         String json = gson.toJson(payload);
-        RequestBody body = RequestBody.create(json, JSON);
-
-        Request request = new Request.Builder()
-                .url(baseUrl + "/api/v1/ingest")
-                .tag(String.class, "/api/v1/ingest")
-                .addHeader("X-API-Key", apiKey)
-                .addHeader("X-Installation-Id", installationId)
-                .post(body)
+        Request request = base("/api/v1/ingest/hello", json)
+                .post(RequestBody.create(json, JSON))
                 .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                logThrottledWarning(eventType + ":io", "[McStat] " + eventType + " send failed: " + safeMessage(e));
-                if (callback != null) callback.onFailure(e);
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) {
-                int status = response.code();
-                String responseBody = "";
-                try {
-                    responseBody = response.body() != null ? response.body().string() : "";
-                } catch (IOException ignored) {
-                    responseBody = "";
-                } finally {
-                    response.close();
-                }
-                if (response.isSuccessful()) {
-                    if (callback != null) callback.onSuccess();
-                } else {
-                    String detail = formatResponseDetail(responseBody);
-                    logThrottledWarning(eventType + ":http:" + status,
-                            "[McStat] " + eventType + " rejected: HTTP " + status + detail);
-                    if (isRetryableStatus(status) && callback != null) {
-                        callback.onFailure(new IOException("HTTP " + status + detail));
-                    }
-                }
-            }
-        });
-    }
-
-    private void logThrottledWarning(String key, String message) {
-        long now = System.currentTimeMillis();
-        synchronized (warningLock) {
-            Long lastLog = lastWarningAt.get(key);
-            if (lastLog == null || now - lastLog >= WARNING_THROTTLE_MS) {
-                int suppressed = suppressedWarnings.containsKey(key) ? suppressedWarnings.remove(key) : 0;
-                lastWarningAt.put(key, now);
-                if (suppressed > 0) {
-                    logger.warning(message + " (suppressed " + suppressed + " similar warnings in the last 60s)");
-                } else {
-                    logger.warning(message);
-                }
-                return;
-            }
-
-            Integer count = suppressedWarnings.get(key);
-            suppressedWarnings.put(key, count == null ? 1 : count + 1);
-        }
-    }
-
-    private String formatResponseDetail(String responseBody) {
-        if (responseBody == null || responseBody.trim().isEmpty()) {
-            return "";
-        }
-
-        String detail = responseBody.replaceAll("\\s+", " ").trim();
-        if (detail.length() > MAX_RESPONSE_DETAIL_LENGTH) {
-            detail = detail.substring(0, MAX_RESPONSE_DETAIL_LENGTH) + "...";
-        }
-        return " - " + detail;
-    }
-
-    private String safeMessage(Exception e) {
-        if (e == null || e.getMessage() == null || e.getMessage().trim().isEmpty()) {
-            return "unknown error";
-        }
-        return e.getMessage();
-    }
-
-    private boolean isRetryableStatus(int status) {
-        return status == 408 || status == 429 || status >= 500;
+        return execute(request);
     }
 
     /**
-     * Stamps X-Timestamp and X-Signature at the moment the call actually goes
-     * out, not when it was built.
-     *
-     * OkHttp dispatches at most 5 calls per host concurrently; the rest wait in
-     * the dispatcher queue. When the API slowed down, calls built minutes
-     * earlier were still queued, and the server — which only accepts a
-     * timestamp inside a short window — answered 401 "Request timestamp
-     * expired". In the server console that reads as "server stats rejected:
-     * HTTP 401", i.e. an API key problem, for a key that was never wrong.
-     * Signing here means the stamp is always fresh no matter how long the call
-     * waited, and a retry re-signs itself instead of replaying a dead stamp.
+     * POST /api/v1/ingest/batch — one spooled batch. The body travels gzip
+     * compressed; the signature covers the JSON before compression, which is
+     * what the server verifies after decompressing it.
      */
-    private Response signRequest(Interceptor.Chain chain) throws IOException {
-        Request original = chain.request();
-        String body = "";
-        RequestBody originalBody = original.body();
-        if (originalBody != null) {
-            Buffer buffer = new Buffer();
-            originalBody.writeTo(buffer);
-            body = buffer.readString(StandardCharsets.UTF_8);
-        }
-
-        // Sign the canonical API path carried on the request tag, NOT
-        // url().encodedPath(). The server verifies against its own literal
-        // ("/api/v1/ingest"), so deriving the path from the URL would break the
-        // moment api-base-url carries a path prefix — the tag keeps this byte
-        // for byte identical to what the call sites signed before.
-        String signedPath = original.tag(String.class);
-        if (signedPath == null) signedPath = original.url().encodedPath();
-
-        long timestamp = System.currentTimeMillis();
-        Request signed = original.newBuilder()
-                .header("X-Timestamp", String.valueOf(timestamp))
-                .header("X-Signature", computeSignature(
-                        original.method(), signedPath, body, timestamp))
+    public Response sendBatch(String json, byte[] gzipped) {
+        Request request = base("/api/v1/ingest/batch", json)
+                .header("Content-Encoding", "gzip")
+                .post(RequestBody.create(gzipped, JSON))
                 .build();
-        return chain.proceed(signed);
+        return execute(request);
+    }
+
+    private Request.Builder base(String path, String body) {
+        return new Request.Builder()
+                .url(baseUrl + path)
+                .tag(Signed.class, new Signed(path, body))
+                .header("X-API-Key", apiKey)
+                .header("X-Installation-Id", installationId)
+                .header("User-Agent", "McStat-Plugin");
+    }
+
+    private Response execute(Request request) {
+        try (okhttp3.Response response = httpClient.newCall(request).execute()) {
+            String text = response.body() != null ? response.body().string() : "";
+            JsonObject data = null;
+            try {
+                JsonElement parsed = gson.fromJson(text, JsonElement.class);
+                if (parsed != null && parsed.isJsonObject()) {
+                    JsonObject root = parsed.getAsJsonObject();
+                    // createSuccessResponse wraps payloads as {"data": …, "success": true}.
+                    data = root.has("data") && root.get("data").isJsonObject() ? root.getAsJsonObject("data") : root;
+                }
+            } catch (JsonParseException ignored) {
+                // Non-JSON error page (proxy, Cloudflare): keep the status, show a short detail.
+            }
+            return new Response(response.code(), data, response.isSuccessful() ? "" : detail(text));
+        } catch (IOException e) {
+            return new Response(0, null, e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+        }
+    }
+
+    private static String detail(String text) {
+        if (text == null) return "";
+        String trimmed = text.replaceAll("\\s+", " ").trim();
+        return trimmed.length() > MAX_DETAIL_LENGTH ? trimmed.substring(0, MAX_DETAIL_LENGTH) + "..." : trimmed;
+    }
+
+    /**
+     * Stamps X-Timestamp and X-Signature when the call actually goes out, not
+     * when it was built: a request that waited in OkHttp's dispatcher (or a
+     * retry) is signed fresh instead of arriving with an expired stamp, which
+     * a server owner would read as a broken API key.
+     */
+    private okhttp3.Response signRequest(Interceptor.Chain chain) throws IOException {
+        Request original = chain.request();
+        Signed signed = original.tag(Signed.class);
+        String path = signed != null ? signed.path : original.url().encodedPath();
+        String body = signed != null && signed.body != null ? signed.body : "";
+        long timestamp = System.currentTimeMillis();
+        Request stamped = original.newBuilder()
+                .header("X-Timestamp", String.valueOf(timestamp))
+                .header("X-Signature", computeSignature(original.method(), path, body, timestamp))
+                .build();
+        return chain.proceed(stamped);
     }
 
     private String computeSignature(String method, String path, String body, long timestamp) {
         try {
-            String message = apiKey + "." + method + "." + path + "." + (body != null ? body : "") + "." + timestamp;
+            String message = apiKey + "." + method + "." + path + "." + body + "." + timestamp;
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(installationId.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             byte[] hash = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder();
-            for (byte b : hash) {
-                hex.append(String.format("%02x", b));
-            }
+            StringBuilder hex = new StringBuilder(hash.length * 2);
+            for (byte b : hash) hex.append(String.format("%02x", b));
             return hex.toString();
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            logger.warning("[McStat] Signature computation failed: " + e.getMessage());
+            logger.warning("Signature computation failed: " + e.getMessage());
             return "";
         }
     }
@@ -294,10 +183,5 @@ public class McStatApiClient {
     public void shutdown() {
         httpClient.dispatcher().executorService().shutdown();
         httpClient.connectionPool().evictAll();
-    }
-
-    public interface ApiCallback {
-        void onSuccess();
-        void onFailure(Exception e);
     }
 }

@@ -4,32 +4,25 @@ import net.md_5.bungee.api.event.PlayerDisconnectEvent;
 import net.md_5.bungee.api.event.PostLoginEvent;
 import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.event.EventHandler;
+import net.md_5.bungee.event.EventPriority;
 import org.mcstat.common.McStatCore;
 
-public class BungeePlayerListener implements Listener {
+/** Network-wide sessions: a player is online from login until they leave the proxy. */
+public final class BungeePlayerListener implements Listener {
 
     private final McStatCore core;
 
-    public BungeePlayerListener(McStatCore core) {
+    BungeePlayerListener(McStatCore core) {
         this.core = core;
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onPostLogin(PostLoginEvent event) {
-        core.onPlayerJoin(
-                event.getPlayer().getUniqueId(),
-                event.getPlayer().getName(),
-                "proxy"
-        );
+        core.onPlayerJoin(event.getPlayer().getUniqueId(), event.getPlayer().getName());
     }
 
-    @EventHandler
-    public void onPlayerDisconnect(PlayerDisconnectEvent event) {
-        core.onPlayerLeave(
-                event.getPlayer().getUniqueId(),
-                event.getPlayer().getName(),
-                "proxy"
-        );
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onDisconnect(PlayerDisconnectEvent event) {
+        core.onPlayerQuit(event.getPlayer().getUniqueId());
     }
-
 }

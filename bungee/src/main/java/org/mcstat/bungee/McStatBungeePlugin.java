@@ -2,84 +2,51 @@ package org.mcstat.bungee;
 
 import net.md_5.bungee.api.CommandSender;
 import net.md_5.bungee.api.chat.TextComponent;
+import net.md_5.bungee.api.connection.ProxiedPlayer;
 import net.md_5.bungee.api.plugin.Command;
 import net.md_5.bungee.api.plugin.Plugin;
 import org.mcstat.common.McStatCore;
 import org.mcstat.common.command.McStatCommandHandler;
-import org.mcstat.common.config.McStatConfig;
-import org.mcstat.common.model.ServerHeartbeat;
+
+import java.util.List;
 
 public class McStatBungeePlugin extends Plugin {
 
     private McStatCore core;
-    private McStatCommandHandler commandHandler;
+    private McStatCommandHandler commands;
 
     @Override
     public void onEnable() {
-        McStatConfig config = BungeeConfigLoader.load(this);
-        String serverName = "BungeeCord-Proxy";
-
-        core = new McStatCore(config, getDataFolder().toPath(), getLogger());
-        core.setServerName(serverName);
-
-        core.setHeartbeatSupplier(() -> {
-            ServerHeartbeat hb = new ServerHeartbeat();
-            hb.setServerName(serverName);
-            hb.setServerVersion(getProxy().getVersion());
-            hb.setOnlinePlayers(getProxy().getOnlineCount());
-            hb.setMaxPlayers(getProxy().getConfig().getPlayerLimit());
-            hb.setTps(-1);
-            return hb;
-        });
-
-        getProxy().getPluginManager().registerListener(this, new BungeePlayerListener(core));
-
+        core = new McStatCore(BungeeConfigLoader.load(this), new BungeePlatform(getProxy()), getDataFolder().toPath(), getLogger());
         core.setPluginVersion(getDescription().getVersion());
-        core.configureUpdater("McStat-BungeeCord", getDataFolder().toPath());
-
+        core.configureUpdater("McStat-BungeeCord");
+        commands = new McStatCommandHandler(core, () -> BungeeConfigLoader.load(this));
+        getProxy().getPluginManager().registerListener(this, new BungeePlayerListener(core));
         getProxy().getPluginManager().registerCommand(this, new Command("mcstat", "mcstat.admin") {
             @Override
             public void execute(CommandSender sender, String[] args) {
-                if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
-                    McStatConfig newConfig = BungeeConfigLoader.load(McStatBungeePlugin.this);
-                    boolean connected = core.reload(newConfig);
-                    if (connected) {
-                        sender.sendMessage(new TextComponent("§6[McStat] §aConfiguration reloaded and API connection verified!"));
-                    } else if (newConfig.isValid()) {
-                        sender.sendMessage(new TextComponent("§6[McStat] §eConfiguration reloaded, but API connection could not be verified yet. Heartbeats will retry automatically."));
-                    } else {
-                        sender.sendMessage(new TextComponent("§6[McStat] §cConfiguration reloaded, but api-key is not configured."));
-                    }
-                    return;
-                }
-
-                String response = commandHandler.handleCommand(args);
-                if (response != null) {
-                    for (String line : response.split("\n")) {
-                        sender.sendMessage(new TextComponent(line));
-                    }
-                }
+                commands.handle(args, languageOf(sender), lines -> send(sender, lines));
             }
         });
-
         getProxy().getPluginManager().registerCommand(this, new Command("vote") {
             @Override
             public void execute(CommandSender sender, String[] args) {
-                String response = commandHandler.getVoteMessage();
-                for (String line : response.split("\n")) {
-                    sender.sendMessage(new TextComponent(line));
-                }
+                send(sender, commands.vote(languageOf(sender)));
             }
         });
-
         core.enable();
-        commandHandler = new McStatCommandHandler(core);
     }
 
     @Override
     public void onDisable() {
-        if (core != null) {
-            core.disable();
-        }
+        if (core != null) core.disable();
+    }
+
+    private String languageOf(CommandSender sender) {
+        return sender instanceof ProxiedPlayer ? BungeePlatform.localeOf((ProxiedPlayer) sender) : core.getConfig().getLanguage();
+    }
+
+    private static void send(CommandSender sender, List<String> lines) {
+        for (String line : lines) sender.sendMessage(TextComponent.fromLegacyText(line));
     }
 }

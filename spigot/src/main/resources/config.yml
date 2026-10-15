@@ -1,26 +1,30 @@
-# McStat Configuration
-# Get your API key from https://mcstat.org/dashboard
-
+# McStat - https://mcstat.org
+# Get your API key in the MCStat dashboard: https://mcstat.org/dashboard
 api-key: "YOUR_API_KEY_HERE"
 api-base-url: "https://mcstat.org"
 
-# How often to send server stats (seconds). Minimum: 10
-sync-interval: 90
+# Language of console messages. Players always see their own client language.
+# en, tr, de, fr, es, pt-BR, ru, ... (any language MCStat is available in)
+language: en
 
-# Custom vote URL (optional). If set, /vote will use this link instead of auto-detecting.
-# Example:
-# vote-url: "https://mcstat.org/tr/servers/your-server-slug#vote"
+# Optional custom /vote link. Empty = your server's MCStat page.
+vote-url: ""
 
-# What data to collect
+# What McStat collects is chosen per server in the MCStat dashboard
+# (Dashboard > your server > Plugin) - no restart or config edit needed.
+# The switches below can additionally turn data off on this server; the
+# dashboard can never turn back on what is switched off here.
 metrics:
-  tps: true
-  player-count: true
-  player-names: true
-  player-playtime: true
-  player-events: true
+  tps: true              # server performance: TPS, MSPT, CPU, RAM, chunks, entities
+  player-playtime: true  # player sessions, playtime and AFK time
+  player-events: true    # join/leave events (needed for sessions)
+  gameplay: true         # blocks, kills, deaths, distance, crafting... (counts only, never chat text)
+  client-info: true      # Minecraft version, client, language and edition of joining players
+  country: true          # player country, looked up on this server (player IPs are never sent)
+  join-address: true     # the domain players connected through
 
-# Update checks use the official GitHub Releases feed.
-# auto-download keeps the new jar in plugins/MCStat/updates and never hot-swaps a running server.
+# Update checks use the official GitHub releases. Downloads go to
+# plugins/McStat/updates; a running server is never hot-swapped.
 updates:
   check: true
   notify-admins: true

@@ -3,16 +3,17 @@ version: ${project.version}
 main: org.mcstat.spigot.McStatSpigotPlugin
 api-version: "1.13"
 folia-supported: true
-description: Server statistics tracking for mcstat.org
+softdepend: [ViaVersion, floodgate]
+description: Server and player statistics for mcstat.org
 author: McStat
 website: https://mcstat.org
 commands:
   mcstat:
-    description: McStat plugin commands
-    usage: /mcstat [status|reload|link|update]
+    description: McStat status, reload and updates
+    usage: /mcstat [status|reload|update|link]
     permission: mcstat.admin
   vote:
-    description: Sunucumuza oy ver
+    description: Vote for this server on MCStat
     usage: /vote
 permissions:
   mcstat.admin:

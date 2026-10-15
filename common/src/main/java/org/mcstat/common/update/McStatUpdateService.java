@@ -127,6 +127,11 @@ public class McStatUpdateService {
         return target;
     }
 
+    /** Result of the most recent check, or null before the first one. */
+    public UpdateInfo getLastInfo() {
+        return lastUpdateInfo;
+    }
+
     public String getLastMessage() {
         return lastMessage;
     }

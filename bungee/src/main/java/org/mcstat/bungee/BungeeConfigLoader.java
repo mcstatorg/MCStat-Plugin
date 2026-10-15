@@ -33,10 +33,13 @@ public class BungeeConfigLoader {
 
             mcConfig.setApiKey(config.getString("api-key", "YOUR_API_KEY_HERE"));
             mcConfig.setApiBaseUrl(config.getString("api-base-url", "https://mcstat.org"));
-            mcConfig.setSyncIntervalSeconds(config.getInt("sync-interval", 90));
-            mcConfig.setSendTps(false);
+            mcConfig.setLanguage(config.getString("language", "en"));
+            mcConfig.setSendTps(true);
             mcConfig.setTrackPlayerTime(config.getBoolean("metrics.player-playtime", true));
             mcConfig.setSendPlayerEvents(config.getBoolean("metrics.player-events", true));
+            mcConfig.setSendClientInfo(config.getBoolean("metrics.client-info", true));
+            mcConfig.setSendCountry(config.getBoolean("metrics.country", true));
+            mcConfig.setSendJoinAddress(config.getBoolean("metrics.join-address", true));
             mcConfig.setUpdateChecksEnabled(config.getBoolean("updates.check", true));
             mcConfig.setUpdateNotifyAdmins(config.getBoolean("updates.notify-admins", true));
             mcConfig.setUpdateAutoDownload(config.getBoolean("updates.auto-download", false));
