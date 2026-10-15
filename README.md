@@ -6,9 +6,9 @@ MCStat connects Minecraft servers and proxy networks to https://mcstat.org. It r
 
 | Package | Use it for |
 | --- | --- |
-| `McStat-Spigot-1.2.0.jar` | Bukkit, Spigot, Paper, Purpur, Pufferfish, Folia, and Bukkit-compatible hybrids (Mohist, Arclight, Magma) |
-| `McStat-Velocity-1.2.0.jar` | Velocity 3.x proxy networks |
-| `McStat-BungeeCord-1.2.0.jar` | BungeeCord and Waterfall proxy networks |
+| `McStat-Spigot-1.2.1.jar` | Bukkit, Spigot, Paper, Purpur, Pufferfish, Folia, and Bukkit-compatible hybrids (Mohist, Arclight, Magma) |
+| `McStat-Velocity-1.2.1.jar` | Velocity 3.x proxy networks |
+| `McStat-BungeeCord-1.2.1.jar` | BungeeCord and Waterfall proxy networks |
 
 Java 8 or newer; Minecraft 1.13 or newer on the Bukkit family (tested on Paper 1.21). Folia is supported natively (no Bukkit scheduler is used).
 

@@ -30,7 +30,7 @@ public class McStatVelocityPlugin {
 
     // Velocity reads the version from an annotation, which needs a compile-time
     // constant; keep it in step with the pom version on every release.
-    public static final String VERSION = "1.2.0";
+    public static final String VERSION = "1.2.1";
 
     private final ProxyServer server;
     private final Logger logger = Logger.getLogger("McStat");
