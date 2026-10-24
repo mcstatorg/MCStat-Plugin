@@ -21,7 +21,7 @@ What is collected is chosen per server in the dashboard (**Dashboard → your se
 | Performance | TPS, tick time (MSPT, Paper), CPU, memory | servers |
 | World load | loaded chunks, entities | servers (not Folia) |
 | Sessions | joins, leaves, playtime, online players | all |
-| AFK time | idle time inside each session | servers |
+| AFK time | idle time inside each session; riding, drifting in water, jumping in place and clicking without moving do not count as activity | servers |
 | Gameplay | blocks broken/placed (per type), mob and player kills (per type), deaths (per cause), distance, crafting, fishing, enchanting, XP, advancements, chat and command **counts** | servers |
 | Client info | Minecraft version (ViaVersion-aware), client brand, client language, Java/Bedrock (Floodgate) | all |
 | Country | country code, looked up **on your server** with the free DB-IP Lite database (downloaded to the plugin folder's `geo/`, refreshed monthly) | all |
