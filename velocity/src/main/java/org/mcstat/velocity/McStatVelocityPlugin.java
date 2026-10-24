@@ -21,16 +21,12 @@ import java.util.logging.Logger;
 @Plugin(
         id = "mcstat",
         name = "McStat",
-        version = McStatVelocityPlugin.VERSION,
+        version = BuildInfo.VERSION,
         description = "Server and player statistics for mcstat.org",
         authors = {"McStat"},
         url = "https://mcstat.org"
 )
 public class McStatVelocityPlugin {
-
-    // Velocity reads the version from an annotation, which needs a compile-time
-    // constant; keep it in step with the pom version on every release.
-    public static final String VERSION = "1.2.2";
 
     private final ProxyServer server;
     private final Logger logger = Logger.getLogger("McStat");
@@ -47,7 +43,7 @@ public class McStatVelocityPlugin {
     @Subscribe
     public void onProxyInitialize(ProxyInitializeEvent event) {
         core = new McStatCore(VelocityConfigLoader.load(dataDirectory, logger), new VelocityPlatform(server), dataDirectory, logger);
-        core.setPluginVersion(VERSION);
+        core.setPluginVersion(BuildInfo.VERSION);
         core.configureUpdater("McStat-Velocity");
         commands = new McStatCommandHandler(core, () -> VelocityConfigLoader.load(dataDirectory, logger));
         server.getEventManager().register(this, new VelocityPlayerListener(core));

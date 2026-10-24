@@ -1,14 +1,21 @@
 # MCStat Minecraft Plugin
 
+[![Latest release](https://img.shields.io/github/v/release/mcstatorg/MCStat-Plugin?label=latest%20release&color=2e7d32)](https://github.com/mcstatorg/MCStat-Plugin/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/mcstatorg/MCStat-Plugin/total?color=2e7d32)](https://github.com/mcstatorg/MCStat-Plugin/releases)
+[![License: MIT](https://img.shields.io/github/license/mcstatorg/MCStat-Plugin?color=2e7d32)](LICENSE)
+
 MCStat connects Minecraft servers and proxy networks to https://mcstat.org. It reports performance, player sessions and gameplay statistics, and the owner reads them in the MCStat dashboard: who plays, for how long, what they do, how the server performs. Free, open source, MIT.
 
-## Packages
+## Download
 
-| Package | Use it for |
-| --- | --- |
-| `McStat-Spigot-1.2.1.jar` | Bukkit, Spigot, Paper, Purpur, Pufferfish, Folia, and Bukkit-compatible hybrids (Mohist, Arclight, Magma) |
-| `McStat-Velocity-1.2.1.jar` | Velocity 3.x proxy networks |
-| `McStat-BungeeCord-1.2.1.jar` | BungeeCord and Waterfall proxy networks |
+Every link below always gives the newest release; the version is part of the file name (`McStat-Spigot-<version>.jar`). Release notes are on the [Releases](https://github.com/mcstatorg/MCStat-Plugin/releases) page.
+
+| Package | Use it for | Download |
+| --- | --- | --- |
+| `McStat-Spigot-<version>.jar` | Bukkit, Spigot, Paper, Purpur, Pufferfish, Folia, and Bukkit-compatible hybrids (Mohist, Arclight, Magma) | [latest](https://mcstat.org/downloads/mcstat/latest/spigot) |
+| `McStat-Velocity-<version>.jar` | Velocity 3.x proxy networks | [latest](https://mcstat.org/downloads/mcstat/latest/velocity) |
+| `McStat-BungeeCord-<version>.jar` | BungeeCord and Waterfall proxy networks | [latest](https://mcstat.org/downloads/mcstat/latest/bungee) |
+| `McStat-Plugin-Source-<version>.tar.gz` | The Maven project | [latest](https://mcstat.org/downloads/mcstat/latest/source) |
 
 Java 8 or newer; Minecraft 1.13 or newer on the Bukkit family (tested on Paper 1.21). Folia is supported natively (no Bukkit scheduler is used).
 
@@ -21,7 +28,7 @@ What is collected is chosen per server in the dashboard (**Dashboard → your se
 | Performance | TPS, tick time (MSPT, Paper), CPU, memory | servers |
 | World load | loaded chunks, entities | servers (not Folia) |
 | Sessions | joins, leaves, playtime, online players | all |
-| AFK time | idle time inside each session; riding, drifting in water, jumping in place and clicking without moving do not count as activity | servers |
+| AFK time | idle time inside each session (after the AFK threshold set in the dashboard). Riding, drifting in water or a bubble column, jumping in place, small camera twitches and clicking without moving do not count as activity; walking, looking around, inventory clicks, chat and commands do. MCStat takes AFK time out of playtime and activity points | servers |
 | Gameplay | blocks broken/placed (per type), mob and player kills (per type), deaths (per cause), distance, crafting, fishing, enchanting, XP, advancements, chat and command **counts** | servers |
 | Client info | Minecraft version (ViaVersion-aware), client brand, client language, Java/Bedrock (Floodgate) | all |
 | Country | country code, looked up **on your server** with the free DB-IP Lite database (downloaded to the plugin folder's `geo/`, refreshed monthly) | all |
